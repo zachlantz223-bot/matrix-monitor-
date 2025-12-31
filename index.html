@@ -3,214 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reality Monitor: Matrix Edition</title>
+    <title>Reality Monitor: The Choice</title>
     <style>
-        body { 
-            margin: 0; 
-            background: black; 
-            overflow: hidden; 
-            font-family: 'Courier New', monospace; 
-            color: #0F0;
+        body { margin: 0; background: black; overflow: hidden; font-family: 'Courier New', monospace; color: #0F0; }
+        canvas { display: block; }
+        
+        /* Pills Container */
+        #choice-overlay {
+            position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%);
+            display: flex; gap: 40px; z-index: 100;
         }
+        .pill {
+            width: 60px; height: 25px; border-radius: 15px; cursor: pointer;
+            border: 2px solid rgba(255,255,255,0.3); transition: 0.3s;
+        }
+        #blue-pill { background: #0000FF; box-shadow: 0 0 15px #00F; }
+        #red-pill { background: #FF0000; box-shadow: 0 0 15px #F00; }
+        .pill:hover { transform: scale(1.2); }
 
-        canvas { 
-            display: block; 
+        /* Admin Dashboard */
+        #admin-dash {
+            position: absolute; top: 20px; left: 20px;
+            background: rgba(0, 20, 0, 0.8); padding: 15px;
+            border: 1px solid #0F0; border-radius: 5px;
+            display: none; pointer-events: none;
         }
         
-        /* Dashboard Overlay */
-        #dashboard { 
-            position: absolute; 
-            top: 20px; 
-            left: 20px; 
-            background: rgba(0, 20, 0, 0.8);
-            padding: 15px;
-            border: 1px solid #0F0;
-            border-radius: 5px;
-            pointer-events: none;
-            z-index: 10;
-        }
-
-        #status-light {
-            display: inline-block;
-            width: 10px;
-            height: 10px;
-            background: #0F0;
-            border-radius: 50%;
-            margin-right: 8px;
-            box-shadow: 0 0 10px #0F0;
-        }
-
-        /* The Déjà Vu Cat Anomaly */
         #cat-anomaly {
-            position: absolute; 
-            top: 50%; 
-            left: 50%; 
-            transform: translate(-50%, -50%);
-            font-size: 200px; 
-            opacity: 0; 
-            pointer-events: none; 
-            z-index: 5;
-            filter: grayscale(1) brightness(0.5);
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 150px; opacity: 0; pointer-events: none;
         }
-
-        .glitch-active { 
-            animation: matrix-shake 0.4s infinite; 
-            opacity: 0.7 !important; 
-        }
-
-        @keyframes matrix-shake {
-            0% { transform: translate(-50%, -50%) skew(10deg); color: #fff; text-shadow: 5px 0 red; }
-            25% { transform: translate(-52%, -48%) skew(-15deg); color: #0f0; text-shadow: -5px 0 blue; }
-            50% { transform: translate(-48%, -52%) skew(5deg); color: #fff; text-shadow: 3px 0 yellow; }
-            75% { transform: translate(-51%, -49%) skew(-5deg); color: #0f0; text-shadow: -3px 0 purple; }
+        .glitch-active { animation: shake 0.3s infinite; opacity: 0.7 !important; }
+        @keyframes shake {
+            0% { transform: translate(-50%, -50%) skew(5deg); color: #fff; }
+            50% { transform: translate(-52%, -48%) skew(-10deg); color: #0f0; }
             100% { transform: translate(-50%, -50%) skew(0deg); }
-        }
-
-        #interaction-prompt {
-            position: absolute;
-            bottom: 20px;
-            width: 100%;
-            text-align: center;
-            font-size: 12px;
-            color: rgba(0, 255, 0, 0.5);
         }
     </style>
 </head>
 <body>
 
-    <div id="dashboard">
-        <div><span id="status-light"></span> <span id="status-text">SYSTEM: NOMINAL</span></div>
-        <div style="margin-top: 10px;">STABILITY: <span id="stability-val">100</span>%</div>
-        <div>ENTROPY_GAP: <span id="entropy-val">0.00</span></div>
+    <div id="admin-dash">
+        <div>STABILITY: <span id="stab-val">100</span>%</div>
+        <div id="hardware-id" style="font-size: 10px; margin-top: 10px; color: #888;"></div>
+        <div id="battery-status" style="font-size: 10px; color: #888;"></div>
+    </div>
+
+    <div id="choice-overlay">
+        <div id="blue-pill" class="pill" onclick="choose('blue')"></div>
+        <div id="red-pill" class="pill" onclick="choose('red')"></div>
     </div>
 
     <div id="cat-anomaly">🐈</div>
-    
-    <div id="interaction-prompt">CLICK ANYWHERE TO CALIBRATE AUDIO SENSORS</div>
-
     <canvas id="canvas"></canvas>
 
     <script>
-        if ('serviceWorker' in navigator) { navigator.serviceWorker.register('sw.js'); }
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
-        const stabilityEl = document.getElementById('stability-val');
-        const statusEl = document.getElementById('status-text');
-        const statusLight = document.getElementById('status-light');
+        const dash = document.getElementById('admin-dash');
+        const stabVal = document.getElementById('stab-val');
         const cat = document.getElementById('cat-anomaly');
-        const prompt = document.getElementById('interaction-prompt');
+        const hwId = document.getElementById('hardware-id');
+        const battStatus = document.getElementById('battery-status');
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
-        // Matrix Characters
-        const glyphs = "日以心0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZｱｲｳｴｵｶｷｸｹｺｻｼｽｾｿﾀﾁﾂﾃﾄﾅﾆﾇﾈﾉﾊﾋﾌﾍﾎﾏﾐﾑﾒﾓﾔﾕﾖﾗﾘﾙﾚﾛﾜﾝ";
+        const glyphs = "日以心0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZｱｲｳｴｵｶｷｸｹｺ";
         const fontSize = 18;
         const columns = canvas.width / fontSize;
         const rainDrops = Array.from({ length: columns }).fill(1);
 
+        let mode = 'none'; 
         let stability = 100;
-        let isGlitched = false;
-        let audioContext;
 
-        // Sound Synthesis (No external files needed)
-        function playGlitchSound() {
-            if (!audioContext) return;
-            const osc = audioContext.createOscillator();
-            const gain = audioContext.createGain();
-            osc.type = 'sine';
-            osc.frequency.setValueAtTime(880, audioContext.currentTime);
-            osc.frequency.exponentialRampToValueAtTime(110, audioContext.currentTime + 0.5);
-            gain.gain.setValueAtTime(0.1, audioContext.currentTime);
-            gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
-            osc.connect(gain);
-            gain.connect(audioContext.destination);
-            osc.start();
-            osc.stop(audioContext.currentTime + 0.5);
+        function choose(c) {
+            mode = c;
+            document.getElementById('choice-overlay').style.display = 'none';
+            if (mode === 'red') {
+                dash.style.display = 'block';
+                // Identify Hardware (Residual Self-Image)
+                hwId.innerText = `CONSTRUCT: ${navigator.platform} | ${navigator.hardwareConcurrency} CORES`;
+            }
         }
 
-        // Enable audio on first click
-        window.addEventListener('click', () => {
-            if (!audioContext) {
-                audioContext = new (window.AudioContext || window.webkitAudioContext)();
-                prompt.style.display = 'none';
-            }
-        });
+        // Battery Monitor (The Oracle)
+        if (navigator.getBattery) {
+            navigator.getBattery().then(batt => {
+                const update = () => {
+                    battStatus.innerText = `ENERGY: ${(batt.level * 100).toFixed(0)}% ${batt.charging ? '[CHARGING]' : ''}`;
+                };
+                batt.onlevelchange = update;
+                batt.onchargingchange = update;
+                update();
+            });
+        }
 
         function draw() {
-            // Trail effect
             ctx.fillStyle = 'rgba(0, 0, 0, 0.1)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Change color based on reality stability
-            if (stability < 30) {
-                ctx.fillStyle = '#FFF'; // Reality "Whiteout"
-                statusLight.style.background = '#F00';
-                statusLight.style.boxShadow = '0 0 10px #F00';
-            } else if (stability < 60) {
-                ctx.fillStyle = '#0FF'; // Cyan shift
-                statusLight.style.background = '#FF0';
-                statusLight.style.boxShadow = '0 0 10px #FF0';
-            } else {
-                ctx.fillStyle = '#0F0'; // Standard Matrix Green
-                statusLight.style.background = '#0F0';
-                statusLight.style.boxShadow = '0 0 10px #0F0';
-            }
-
+            // Blue Pill = Perfect Green. Red Pill = Glitchy White/Cyan
+            ctx.fillStyle = (mode === 'red' && stability < 50) ? '#0FF' : '#0F0';
             ctx.font = fontSize + 'px monospace';
 
-            for (let i = 0; i < rainDrops.length; i++) {
-                // If glitched, characters might freeze or repeat
-                const text = (stability < 20 && Math.random() > 0.9) ? "ERR" : glyphs.charAt(Math.floor(Math.random() * glyphs.length));
+            rainDrops.forEach((y, i) => {
+                let text = glyphs.charAt(Math.floor(Math.random() * glyphs.length));
+                // Red pill allows glitches in the rain characters
+                if (mode === 'red' && stability < 30 && Math.random() > 0.9) text = "ERROR";
                 
-                ctx.fillText(text, i * fontSize, rainDrops[i] * fontSize);
-
-                if (rainDrops[i] * fontSize > canvas.height && Math.random() > 0.975) {
-                    rainDrops[i] = 0;
-                }
+                ctx.fillText(text, i * fontSize, y * fontSize);
+                if (y * fontSize > canvas.height && Math.random() > 0.975) rainDrops[i] = 0;
                 rainDrops[i]++;
-            }
+            });
 
-            // --- REALITY CALCULATION ---
-            // Naturally fluctuate stability
-            if (Math.random() > 0.99) stability -= Math.random() * 15;
-            if (stability < 100) stability += 0.1;
+            if (mode === 'red') {
+                if (Math.random() > 0.98) stability -= 2;
+                if (stability < 100) stability += 0.1;
+                stabVal.innerText = Math.floor(stability);
 
-            stabilityEl.innerText = Math.floor(Math.max(0, stability));
-            document.getElementById('entropy-val').innerText = (Math.random() * (100 - stability) / 100).toFixed(4);
-
-            // Trigger Déjà Vu Anomaly
-            if (stability < 40 && !isGlitched) {
-                triggerAnomaly();
+                if (stability < 40 && Math.random() > 0.99) {
+                    cat.classList.add('glitch-active');
+                    setTimeout(() => cat.classList.remove('glitch-active'), 1000);
+                }
             }
 
             requestAnimationFrame(draw);
         }
-
-        function triggerAnomaly() {
-            isGlitched = true;
-            statusEl.innerText = "STATUS: DÉJÀ VU DETECTED";
-            cat.classList.add('glitch-active');
-            playGlitchSound();
-
-            // Flash the screen briefly
-            ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-            setTimeout(() => {
-                cat.classList.remove('glitch-active');
-                statusEl.innerText = "STATUS: NOMINAL";
-                isGlitched = false;
-                stability = 75; // Partial recovery after the "reset"
-            }, 1800);
-        }
-
-        // Handle Resize
-        window.addEventListener('resize', () => {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        });
-
         draw();
     </script>
 </body>
